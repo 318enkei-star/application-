@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Yakiniku Master - Penalty Update -</title>
+    <style>
+        * { touch-action: none; user-select: none; -webkit-user-select: none; box-sizing: border-box; }
+        body {
+            margin: 0; padding: 0; background: #1a1a1a; color: #fff;
+            font-family: sans-serif; overflow: hidden;
+            width: 100vw; height: 100vh; display: flex; flex-direction: column; align-items: center;
+        }
+        #ui-header {
+            width: 100%; background: #222; padding: 10px 0;
+            display: flex; justify-content: space-around; border-bottom: 3px solid #e67e22; z-index: 10;
+        }
+        #timer-container { font-size: 18px; font-weight: bold; text-align: center; }
+        #timer { font-size: 28px; color: #2ecc71; }
+        canvas { background: #333; border-radius: 10px; margin-top: 10px; box-shadow: inset 0 0 40px #000; display: block; }
+        
+        #ui-footer { margin-top: auto; padding: 10px; width: 100%; max-width: 450px; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
+        #btn-mesh {
+            width: 100%; height: 50px; font-size: 18px; font-weight: bold;
+            background: linear-gradient(#e67e22, #d35400); color: white;
+            border: none; border-radius: 25px; cursor: pointer;
+        }
+        #btn-mesh:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); z-index: 1000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .modal-box { background: #333; padding: 25px; border-radius: 20px; text-align: center; border: 2px solid #e67e22; width: 85%; max-width: 400px; }
+        .start-btn { margin-top: 20px; padding: 15px 40px; font-size: 22px; font-weight: bold; background: #e67e22; color: white; border: none; border-radius: 10px; cursor: pointer; }
+        
+        .val { font-size: 20px; font-weight: bold; color: #f1c40f; }
+        .label { font-size: 10px; color: #aaa; }
+    </style>
+</head>
+<body>
+
+<div id="ui-header">
+    <div style="text-align:center"><div class="label">SCORE</div><div id="score" class="val">0</div></div>
+    <div id="timer-container">TIME<br><span id="timer">60</span></div>
+    <div style="text-align:center"><div class="label">網の汚れ</div><div id="dirt" class="val">0%</div></div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<div id="ui-footer">
+    <button id="btn-mesh" disabled>網を交換 (Cost: 300)</button>
+    <div style="text-align:center; font-size: 11px; color: #666;">焦げ(💀)はスコアが減るので注意！</div>
+</div>
+
+<div id="start-overlay" class="overlay">
+    <div class="modal-box">
+        <h1 style="color: #e67e22; margin: 0 0 10px 0;">至高の網焼き</h1>
+        <p>【警告】肉を焦がすと減点です</p>
+        <button class="start-btn" onclick="startGame()">開店する</button>
+    </div>
+</div>
+
+<div id="result-overlay" class="overlay" style="display:none;">
+    <div class="modal-box">
+        <h2>営業終了</h2>
+        <div id="final-score" style="font-size: 54px; color: #f1c40f; font-weight: bold;">0</div>
+        <p style="font-size: 12px; color: #888; margin-top: 20px;">リロードして再挑戦</p>
+    </div>
+</div>
+
+<script>
+    const APPEARANCE_RATES = { nami: 45, jyo: 10, tan: 20, horu: 25 };
+    const MEAT_TYPES = {
+        nami: { emoji: "🥩", score: 200, speed: 0.3,  dirt: 0.05 },
+        jyo:  { emoji: "🥓", score: 500, speed: 0.6,  dirt: 0.08 },
+        tan:  { emoji: "👅", score: 300, speed: 0.15, dirt: 0.02 },
+        horu: { emoji: "🧼", score: 600, speed: 1.0,  dirt: 0.15 }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisp = document.getElementById('score');
+        const dirtDisp = document.getElementById('dirt');
+        const timerDisp = document.getElementById('timer');
+        const meshBtn = document.getElementById('btn-mesh');
+        const startOverlay = document.getElementById('start-overlay');
+        const resultOverlay = document.getElementById('result-overlay');
+        const finalScoreDisp = document.getElementById('final-score');
+
+        const width = Math.min(window.innerWidth * 0.95, 450);
+        const height = window.innerHeight * 0.6;
+        canvas.width = width;
+        canvas.height = height;
+
+        const plateY = height * 0.8;
+        let score = 0, dirt = 0, timeLeft = 60;
+        let meats = [], particles = [], gameActive = false;
+        let timerInterval, spawnInterval;
+
+        class Meat {
+            constructor(isOnPlate = true) {
+                const rand = Math.random() * 100;
+                if (rand < APPEARANCE_RATES.nami) this.type = MEAT_TYPES.nami;
+                else if (rand < APPEARANCE_RATES.nami + APPEARANCE_RATES.jyo) this.type = MEAT_TYPES.jyo;
+                else if (rand < APPEARANCE_RATES.nami + APPEARANCE_RATES.jyo + APPEARANCE_RATES.tan) this.type = MEAT_TYPES.tan;
+                else this.type = MEAT_TYPES.horu;
+
+                this.w = 55; this.h = 55;
+                this.isOnPlate = isOnPlate;
+                this.cook = 0;
+                this.isDragging = false;
+                this.emoji = this.type.emoji;
+                if(isOnPlate) this.setPlatePos();
+            }
+            setPlatePos() {
+                for(let i=0; i<5; i++) {
+                    let tx = 15 + i * 85;
+                    let ty = plateY + 10;
+                    if(!meats.some(m => m.isOnPlate && m.x === tx)) {
+                        this.x = tx; this.y = ty; return;
+                    }
+                }
+                this.x = 15; this.y = plateY + 10;
+            }
+            update() {
+                if (!gameActive || this.isDragging || this.isOnPlate) return;
+                let efficiency = Math.max(0.1, (100 - dirt) / 100);
+                this.cook += this.type.speed * efficiency;
+                
+                // 網へのダメージ：焦げている間(💀)は通常の2倍汚れる
+                let damageMultiplier = (this.emoji === "💀") ? 2.0 : 1.0;
+                dirt += this.type.dirt * damageMultiplier;
+
+                if (this.cook > 100) this.emoji = "🍖";
+                if (this.cook > 180) this.emoji = "💀";
+            }
+            draw() {
+                ctx.font = "45px serif";
+                ctx.fillText(this.emoji, this.x, this.y + 40);
+                if(!this.isOnPlate) {
+                    ctx.fillStyle = "rgba(0,0,0,0.3)";
+                    ctx.fillRect(this.x, this.y - 5, this.w, 5);
+                    let barColor = this.cook > 180 ? "#333" : (this.cook > 100 ? "#2ecc71" : "#e74c3c");
+                    ctx.fillStyle = barColor;
+                    ctx.fillRect(this.x, this.y - 5, (Math.min(this.cook, 200) / 200) * this.w, 5);
+                }
+            }
+        }
+
+        window.startGame = function() {
+            if (gameActive) return;
+            gameActive = true;
+            startOverlay.style.display = 'none';
+            for(let i=0; i<4; i++) meats.push(new Meat(true));
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                timerDisp.innerText = timeLeft;
+                if (timeLeft <= 0) endGame();
+            }, 1000);
+            spawnInterval = setInterval(() => {
+                if (!gameActive) return;
+                let onPlateCount = meats.filter(m => m.isOnPlate).length;
+                if (onPlateCount < 5) meats.push(new Meat(true));
+            }, 1500);
+        };
+
+        function endGame() {
+            gameActive = false;
+            clearInterval(timerInterval);
+            clearInterval(spawnInterval);
+            finalScoreDisp.innerText = score;
+            resultOverlay.style.display = 'flex';
+        }
+
+        meshBtn.addEventListener('click', () => {
+            if (gameActive && score >= 300) {
+                score -= 300; dirt = 0;
+                particles.push({ x: width/2 - 50, y: height/2, text: "CLEAN!", life: 40, color: "#3498db" });
+            }
+        });
+
+        let activeMeat = null, offset = { x: 0, y: 0 };
+        function getPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return { x: clientX - rect.left, y: clientY - rect.top };
+        }
+        function startAction(e) {
+            if (!gameActive) return;
+            const pos = getPos(e);
+            for (let i = meats.length - 1; i >= 0; i--) {
+                const m = meats[i];
+                if (pos.x > m.x && pos.x < m.x + m.w && pos.y > m.y && pos.y < m.y + m.h) {
+                    if (m.emoji === "🍖") {
+                        score += m.type.score;
+                        particles.push({ x: m.x, y: m.y, text: `+${m.type.score}`, life: 30, color: "#f1c40f" });
+                        meats.splice(i, 1); return;
+                    } else if (m.emoji === "💀") {
+                        // ペナルティ：マイナス50点
+                        score = Math.max(0, score - 50);
+                        particles.push({ x: m.x, y: m.y, text: "PENALTY! -50", life: 40, color: "#e74c3c" });
+                        meats.splice(i, 1); return;
+                    } else {
+                        activeMeat = m; m.isDragging = true;
+                        offset.x = pos.x - m.x; offset.y = pos.y - m.y; return;
+                    }
+                }
+            }
+        }
+        function moveAction(e) { if (activeMeat) { const pos = getPos(e); activeMeat.x = pos.x - offset.x; activeMeat.y = pos.y - offset.y; } }
+        function endAction() { 
+            if (activeMeat) { 
+                if (activeMeat.y < plateY - 20) activeMeat.isOnPlate = false;
+                else { activeMeat.isOnPlate = true; activeMeat.setPlatePos(); }
+                activeMeat.isDragging = false; activeMeat = null; 
+            } 
+        }
+
+        canvas.addEventListener('mousedown', startAction);
+        window.addEventListener('mousemove', moveAction);
+        window.addEventListener('mouseup', endAction);
+        canvas.addEventListener('touchstart', (e) => { if(e.cancelable) e.preventDefault(); startAction(e); }, {passive: false});
+        canvas.addEventListener('touchmove', (e) => { if(e.cancelable) e.preventDefault(); moveAction(e); }, {passive: false});
+        canvas.addEventListener('touchend', endAction);
+
+        function loop() {
+            ctx.clearRect(0, 0, width, height);
+            ctx.strokeStyle = "#444";
+            for(let i=0; i<width; i+=40) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,plateY); ctx.stroke(); }
+            for(let i=0; i<plateY; i+=40) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(width,i); ctx.stroke(); }
+            ctx.fillStyle = "#2c3e50"; ctx.fillRect(0, plateY, width, height - plateY);
+            meats.forEach(m => { m.update(); m.draw(); });
+            particles.forEach((p, i) => {
+                ctx.fillStyle = p.color || "#fff"; ctx.font = "bold 20px sans-serif"; ctx.fillText(p.text, p.x, p.y);
+                p.y -= 1; p.life--; if (p.life <= 0) particles.splice(i, 1);
+            });
+            scoreDisp.innerText = score;
+            dirtDisp.innerText = Math.floor(Math.min(100, dirt)) + "%";
+            meshBtn.disabled = score < 300;
+            requestAnimationFrame(loop);
+        }
+        loop();
+    });
+</script>
+</body>
+</html>
