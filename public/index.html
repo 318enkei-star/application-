@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>至高の網焼き - 究極の職人 -</title>
+    <title>至高の網焼き職人</title>
     <style>
         * { touch-action: none; user-select: none; -webkit-user-select: none; box-sizing: border-box; }
         body {
@@ -15,37 +15,35 @@
             width: 100%; background: #222; padding: 10px 0;
             display: flex; justify-content: space-around; border-bottom: 3px solid #e67e22; z-index: 10;
         }
-        #timer-container { font-size: 18px; font-weight: bold; text-align: center; }
-        #timer { font-size: 28px; color: #2ecc71; }
+        #timer-container { font-size: 16px; font-weight: bold; text-align: center; }
+        #timer { font-size: 24px; color: #2ecc71; }
+        
         canvas { background: #333; border-radius: 10px; margin-top: 5px; box-shadow: inset 0 0 40px #000; display: block; }
         
         #ui-footer { 
             margin-top: auto; 
-            padding: 10px 10px calc(60px + env(safe-area-inset-bottom)); /* Safari対策：セーフエリアを確保 */
+            /* Safariの操作バーとの干渉を防ぐため、下の余白を80px確保 */
+            padding: 10px 20px calc(80px + env(safe-area-inset-bottom)); 
             width: 100%; max-width: 450px; display: flex; flex-direction: column; gap: 10px; z-index: 10; 
         }
         #btn-mesh {
-            width: 100%; height: 70px; font-size: 20px; font-weight: bold;
+            width: 100%; height: 70px; font-size: 22px; font-weight: bold;
             background: linear-gradient(#e67e22, #d35400); color: white;
-            border: none; border-radius: 30px; cursor: pointer;
-            box-shadow: 0 4px 0 #a04000;
+            border: none; border-radius: 35px; cursor: pointer;
+            box-shadow: 0 5px 0 #a04000;
         }
         #btn-mesh:active { transform: translateY(2px); box-shadow: 0 2px 0 #a04000; }
-        #btn-mesh:disabled { opacity: 0.4; filter: grayscale(1); }
+        #btn-mesh:disabled { opacity: 0.3; filter: grayscale(1); }
 
         .overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.9); z-index: 1000;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
-        .modal-box { background: #333; padding: 25px; border-radius: 20px; text-align: center; border: 2px solid #e67e22; width: 90%; max-width: 400px; }
+        .modal-box { background: #222; padding: 25px; border-radius: 20px; text-align: center; border: 2px solid #e67e22; width: 90%; max-width: 400px; }
         
-        /* チュートリアル用のスタイル */
-        .tutorial-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 20px 0; text-align: left; font-size: 13px; }
-        .step { background: #444; padding: 10px; border-radius: 8px; }
-        .step span { font-size: 20px; display: block; margin-bottom: 5px; }
-
-        .start-btn { width: 100%; padding: 15px; font-size: 22px; font-weight: bold; background: #e67e22; color: white; border: none; border-radius: 10px; cursor: pointer; }
+        .tutorial-area { text-align: left; background: #333; padding: 15px; border-radius: 10px; font-size: 14px; margin: 15px 0; line-height: 1.6; }
+        .start-btn { width: 100%; padding: 18px; font-size: 22px; font-weight: bold; background: #e67e22; color: white; border: none; border-radius: 12px; cursor: pointer; }
         
         .val { font-size: 20px; font-weight: bold; color: #f1c40f; }
         .label { font-size: 10px; color: #aaa; }
@@ -54,52 +52,63 @@
 <body>
 
 <div id="ui-header">
-    <div style="text-align:center"><div class="label">売上金</div><div id="score" class="val">0</div></div>
+    <div style="text-align:center"><div class="label">売上</div><div id="score" class="val">0</div></div>
     <div id="timer-container">残り時間<br><span id="timer">60</span></div>
-    <div style="text-align:center"><div class="label">網の焦げ付き</div><div id="dirt" class="val">0%</div></div>
+    <div style="text-align:center"><div class="label">網の汚れ</div><div id="dirt" class="val">0%</div></div>
 </div>
 
 <canvas id="gameCanvas"></canvas>
 
 <div id="ui-footer">
-    <button id="btn-mesh" disabled>新しい網に交換 (¥300)</button>
-    <div style="text-align:center; font-size: 12px; color: #999;">※焦げた肉はペナルティが発生します！</div>
+    <button id="btn-mesh" disabled>網を交換する (¥300)</button>
 </div>
 
 <div id="start-overlay" class="overlay">
     <div class="modal-box">
-        <h1 style="color: #e67e22; margin: 0;">職人の炭火焼き</h1>
-        <p style="font-size: 14px; color: #ccc;">～ 最高の状態で提供せよ ～</p>
-        
-        <div class="tutorial-grid">
-            <div class="step"><span>① 運ぶ</span>お皿の肉をドラッグして網の上へ移動！</div>
-            <div class="step"><span>② 見極める</span>緑色のゲージが最大になったら食べ頃！</div>
-            <div class="step"><span>③ 収穫</span>焼けた肉をタップしてスコア獲得！</div>
-            <div class="step"><span>④ 清掃</span>網が汚れると焼けるのが遅くなるぞ！</div>
+        <h1 style="color: #e67e22; margin: 0;">至高の網焼き職人</h1>
+        <div class="tutorial-area">
+            <p style="margin-top:0; color:#f1c40f; font-weight:bold;">🔥 遊び方のコツ</p>
+            1. 下の皿から肉を<b>網へドラッグ</b>！<br>
+            2. ゲージが<b>緑色</b>になったら食べ頃！<br>
+            3. 焼けた肉を<b>タップ</b>して売上回収！<br>
+            4. 網が汚れると焼けるのが遅くなるぞ！
         </div>
-
         <button class="start-btn" onclick="startGame()">修行開始</button>
     </div>
 </div>
 
 <div id="result-overlay" class="overlay" style="display:none;">
     <div class="modal-box">
-        <h2>本日の営業終了</h2>
+        <h2>営業終了！</h2>
+        <div class="label">本日の売上</div>
         <div id="final-score" style="font-size: 54px; color: #f1c40f; font-weight: bold;">0</div>
-        <p>お疲れ様でした！</p>
-        <button class="start-btn" onclick="location.reload()">もう一度挑戦</button>
+        <button class="start-btn" onclick="location.reload()" style="margin-top:20px;">もう一度挑戦</button>
     </div>
 </div>
 
 <script>
-    // --- 画像設定エリア ---
-    // GitHubのpublicフォルダに画像を入れた場合、そのファイル名に変更してください
-    // 例: { raw: 'meat_raw.png', cooked: 'meat_cooked.png', burnt: 'meat_burnt.png' }
-    const MEAT_IMAGES = {
-        nami: { emoji: "🥩", score: 200, speed: 0.3,  dirt: 0.05 },
-        jyo:  { emoji: "🥓", score: 500, speed: 0.6,  dirt: 0.08 },
-        tan:  { emoji: "👅", score: 300, speed: 0.15, dirt: 0.02 },
-        horu: { emoji: "🧼", score: 600, speed: 1.0,  dirt: 0.15 }
+    // --- 画像の読み込み設定 ---
+    const images = {};
+    const imageFiles = {
+        nami: 'meat_nami.png',
+        jyo: 'meat_jyo.png',
+        tan: 'meat_tan.png',
+        horu: 'meat_horu.png',
+        ok: 'meat_ok.png',
+        bad: 'meat_bad.png'
+    };
+
+    // 画像のプリロード
+    Object.keys(imageFiles).forEach(key => {
+        images[key] = new Image();
+        images[key].src = imageFiles[key];
+    });
+
+    const MEAT_TYPES = {
+        nami: { imgKey: 'nami', score: 200, speed: 0.3,  dirt: 0.05 },
+        jyo:  { imgKey: 'jyo',  score: 500, speed: 0.6,  dirt: 0.08 },
+        tan:  { imgKey: 'tan',  score: 300, speed: 0.15, dirt: 0.02 },
+        horu: { imgKey: 'horu', score: 600, speed: 1.0,  dirt: 0.15 }
     };
 
     const canvas = document.getElementById('gameCanvas');
@@ -113,59 +122,67 @@
     const finalScoreDisp = document.getElementById('final-score');
 
     const width = Math.min(window.innerWidth * 0.95, 450);
-    const height = window.innerHeight * 0.55; // 少し高さを抑えてボタンを上げる
+    // ボタンの位置を上げるためにCanvasの高さを少し抑える(画面の45%)
+    const height = window.innerHeight * 0.45; 
     canvas.width = width;
     canvas.height = height;
 
-    const plateY = height * 0.75;
+    const plateY = height * 0.7;
     let score = 0, dirt = 0, timeLeft = 60;
     let meats = [], particles = [], gameActive = false;
     let timerInterval, spawnInterval;
 
     class Meat {
         constructor(isOnPlate = true) {
-            const types = Object.keys(MEAT_IMAGES);
-            this.type = MEAT_IMAGES[types[Math.floor(Math.random() * types.length)]];
-            this.w = 55; this.h = 55;
+            const keys = Object.keys(MEAT_TYPES);
+            this.type = MEAT_TYPES[keys[Math.floor(Math.random() * keys.length)]];
+            this.w = 60; this.h = 60;
             this.isOnPlate = isOnPlate;
             this.cook = 0;
             this.isDragging = false;
-            this.emoji = this.type.emoji;
+            this.status = 'raw'; // raw, ok, bad
             if(isOnPlate) this.setPlatePos();
         }
         setPlatePos() {
             for(let i=0; i<5; i++) {
-                let tx = 15 + i * 85;
-                let ty = plateY + 15;
+                let tx = 20 + i * (width/5);
+                let ty = plateY + 10;
                 if(!meats.some(m => m.isOnPlate && m.x === tx)) {
                     this.x = tx; this.y = ty; return;
                 }
             }
-            this.x = 15; this.y = plateY + 15;
+            this.x = 20; this.y = plateY + 10;
         }
         update() {
             if (!gameActive || this.isDragging || this.isOnPlate) return;
             let efficiency = Math.max(0.1, (100 - dirt) / 100);
             this.cook += this.type.speed * efficiency;
             
-            let damageMultiplier = (this.emoji === "💀") ? 2.0 : 1.0;
-            dirt += this.type.dirt * damageMultiplier;
+            dirt += this.type.dirt * (this.status === 'bad' ? 2 : 1);
 
-            if (this.cook > 100) this.emoji = "🍖";
-            if (this.cook > 180) this.emoji = "💀";
+            if (this.cook > 100) this.status = 'ok';
+            if (this.cook > 180) this.status = 'bad';
         }
         draw() {
-            ctx.font = "45px serif";
-            // ここで画像を切り替える処理を追加可能
-            // if(this.emoji === "🍖") ctx.drawImage(imgCooked, this.x, this.y...)
-            ctx.fillText(this.emoji, this.x, this.y + 40);
+            let currentImg;
+            if (this.status === 'bad') currentImg = images.bad;
+            else if (this.status === 'ok') currentImg = images.ok;
+            else currentImg = images[this.type.imgKey];
+
+            if (currentImg.complete) {
+                ctx.drawImage(currentImg, this.x, this.y, this.w, this.h);
+            } else {
+                // 画像読み込み中やエラー時の代替表示
+                ctx.fillStyle = "#555";
+                ctx.fillRect(this.x, this.y, this.w, this.h);
+            }
             
             if(!this.isOnPlate) {
-                ctx.fillStyle = "rgba(0,0,0,0.4)";
-                ctx.fillRect(this.x, this.y - 10, this.w, 6);
-                let barColor = this.cook > 180 ? "#333" : (this.cook > 100 ? "#2ecc71" : "#e74c3c");
+                ctx.fillStyle = "rgba(0,0,0,0.5)";
+                ctx.fillRect(this.x, this.y - 12, this.w, 8);
+                let barColor = this.status === 'bad' ? "#333" : (this.status === 'ok' ? "#2ecc71" : "#e74c3c");
                 ctx.fillStyle = barColor;
-                ctx.fillRect(this.x, this.y - 10, (Math.min(this.cook, 200) / 200) * this.w, 6);
+                ctx.fillRect(this.x, this.y - 12, (Math.min(this.cook, 200) / 200) * this.w, 8);
             }
         }
     }
@@ -181,7 +198,7 @@
         }, 1000);
         spawnInterval = setInterval(() => {
             if (meats.filter(m => m.isOnPlate).length < 5) meats.push(new Meat(true));
-        }, 1200);
+        }, 1500);
     };
 
     function endGame() {
@@ -195,11 +212,10 @@
     meshBtn.addEventListener('click', () => {
         if (gameActive && score >= 300) {
             score -= 300; dirt = 0;
-            particles.push({ x: width/2 - 50, y: height/2, text: "網交換完了！", life: 40, color: "#3498db" });
+            particles.push({ x: width/2 - 60, y: height/2, text: "網交換！✨", life: 40, color: "#3498db" });
         }
     });
 
-    // --- インタラクション (Touch/Mouse) ---
     let activeMeat = null, offset = { x: 0, y: 0 };
     function getPos(e) {
         const rect = canvas.getBoundingClientRect();
@@ -213,13 +229,13 @@
         for (let i = meats.length - 1; i >= 0; i--) {
             const m = meats[i];
             if (pos.x > m.x && pos.x < m.x + m.w && pos.y > m.y && pos.y < m.y + m.h) {
-                if (m.emoji === "🍖") {
+                if (m.status === 'ok') {
                     score += m.type.score;
                     particles.push({ x: m.x, y: m.y, text: `+${m.type.score}`, life: 30, color: "#f1c40f" });
                     meats.splice(i, 1); return;
-                } else if (m.emoji === "💀") {
-                    score = Math.max(0, score - 50);
-                    particles.push({ x: m.x, y: m.y, text: "焦げ！ -50", life: 40, color: "#e74c3c" });
+                } else if (m.status === 'bad') {
+                    score = Math.max(0, score - 100);
+                    particles.push({ x: m.x, y: m.y, text: "焦げ！ -100", life: 40, color: "#e74c3c" });
                     meats.splice(i, 1); return;
                 } else {
                     activeMeat = m; m.isDragging = true;
@@ -246,10 +262,15 @@
 
     function loop() {
         ctx.clearRect(0, 0, width, height);
-        ctx.strokeStyle = "#444";
-        for(let i=0; i<width; i+=40) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,plateY); ctx.stroke(); }
-        for(let i=0; i<plateY; i+=40) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(width,i); ctx.stroke(); }
+        // 網の描画
+        ctx.strokeStyle = "#444"; ctx.lineWidth = 1;
+        for(let i=0; i<width; i+=30) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,plateY); ctx.stroke(); }
+        for(let i=0; i<plateY; i+=30) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(width,i); ctx.stroke(); }
+        
+        // 皿のエリア
         ctx.fillStyle = "#2c3e50"; ctx.fillRect(0, plateY, width, height - plateY);
+        ctx.fillStyle = "#34495e"; ctx.fillRect(0, plateY, width, 5); // 境界線
+
         meats.forEach(m => { m.update(); m.draw(); });
         particles.forEach((p, i) => {
             ctx.fillStyle = p.color || "#fff"; ctx.font = "bold 24px sans-serif"; ctx.fillText(p.text, p.x, p.y);
