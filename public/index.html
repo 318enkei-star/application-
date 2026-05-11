@@ -17,13 +17,9 @@
         }
         #timer-container { font-size: 16px; font-weight: bold; text-align: center; }
         #timer { font-size: 24px; color: #2ecc71; }
-        
-        /* 網（キャンバス）の見た目 */
         canvas { background: #333; border-radius: 10px; margin-top: 5px; box-shadow: inset 0 0 50px #000; display: block; }
-        
         #ui-footer { 
             margin-top: auto; 
-            /* 下部の余白をしっかり確保（Safari対策） */
             padding: 10px 20px calc(90px + env(safe-area-inset-bottom)); 
             width: 100%; max-width: 450px; display: flex; flex-direction: column; z-index: 10; 
         }
@@ -45,6 +41,19 @@
         .tutorial-area { text-align: left; background: #333; padding: 15px; border-radius: 10px; font-size: 14px; margin: 15px 0; line-height: 1.6; }
         .start-btn { width: 100%; padding: 20px; font-size: 22px; font-weight: bold; background: #e67e22; color: white; border: none; border-radius: 12px; cursor: pointer; }
         
+        /* カウントダウン用アニメーション */
+        #count-display {
+            font-size: 120px; font-weight: bold; color: #f1c40f;
+            text-shadow: 0 0 20px rgba(230, 126, 34, 0.8);
+            animation: count-pulse 1s ease-out infinite;
+            display: none; pointer-events: none; z-index: 2000;
+        }
+        @keyframes count-pulse {
+            0% { transform: scale(0.5); opacity: 0; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(1); opacity: 0; }
+        }
+
         .val { font-size: 20px; font-weight: bold; color: #f1c40f; }
         .label { font-size: 10px; color: #aaa; }
     </style>
@@ -53,7 +62,7 @@
 
 <div id="ui-header">
     <div style="text-align:center"><div class="label">売上</div><div id="score" class="val">0</div></div>
-    <div id="timer-container">残り時間<br><span id="timer">60</span></div>
+    <div id="timer-container">残り時間<br><span id="timer">30</span></div>
     <div style="text-align:center"><div class="label">網の汚れ</div><div id="dirt" class="val">0%</div></div>
 </div>
 
@@ -63,18 +72,22 @@
     <button id="btn-mesh" disabled>網を交換する (¥300)</button>
 </div>
 
+<div id="count-overlay" class="overlay" style="display:none; background: rgba(0,0,0,0.5);">
+    <div id="count-display">3</div>
+</div>
+
 <div id="start-overlay" class="overlay">
     <div class="modal-box">
         <h1 style="color: #e67e22; margin: 0;">肉を焼く匠をめざせ</h1>
         <div class="tutorial-area">
-            <p style="margin-top:0; color:#f1c40f; font-weight:bold;">🔥 素早く、丁寧に！</p>
+            <p style="margin-top:0; color:#f1c40f; font-weight:bold;"> 受付頂いてお待ちくださーい！</p>
             ・下の皿から肉を<b>網へドラッグ</b>！<br>
             ・ゲージが<b>緑色</b>になったらタップで回収！<br>
             ・網が汚れると焼けるのが遅くなるぞ！<br>
             ・<b>網交換</b>をうまく使って売上を伸ばそう！
-            ・制限時間は<b>30秒!!</b>
+            ・制限時間は<b>30秒！</b>
         </div>
-        <button class="start-btn" onclick="startGame()">営業開始</button>
+        <button class="start-btn" onclick="preStart()">修行開始</button>
     </div>
 </div>
 
@@ -88,15 +101,10 @@
 </div>
 
 <script>
-    // --- 画像設定 ---
     const images = {};
     const imageFiles = {
-        nami: 'meat_nami.png',
-        jyo: 'meat_jyo.png',
-        tan: 'meat_tan.png',
-        horu: 'meat_horu.png',
-        ok: 'meat_ok.png',
-        bad: 'meat_bad.png'
+        nami: 'meat_nami.png', jyo: 'meat_jyo.png', tan: 'meat_tan.png',
+        horu: 'meat_horu.png', ok: 'meat_ok.png', bad: 'meat_bad.png'
     };
 
     Object.keys(imageFiles).forEach(key => {
@@ -104,12 +112,11 @@
         images[key].src = imageFiles[key];
     });
 
-    // --- バランス調整（speedアップ、dirtダウン） ---
     const MEAT_TYPES = {
-        nami: { imgKey: 'nami', score: 200, speed: 0.6,  dirt: 0.02 }, // speed 0.3 -> 0.6
-        jyo:  { imgKey: 'jyo',  score: 500, speed: 0.9,  dirt: 0.04 }, // speed 0.6 -> 0.9
-        tan:  { imgKey: 'tan',  score: 300, speed: 0.4,  dirt: 0.01 }, // speed 0.15 -> 0.4
-        horu: { imgKey: 'horu', score: 600, speed: 1.5,  dirt: 0.08 }  // speed 1.0 -> 1.5
+        nami: { imgKey: 'nami', score: 200, speed: 0.6,  dirt: 0.02 },
+        jyo:  { imgKey: 'jyo',  score: 500, speed: 0.9,  dirt: 0.04 },
+        tan:  { imgKey: 'tan',  score: 300, speed: 0.4,  dirt: 0.01 },
+        horu: { imgKey: 'horu', score: 600, speed: 1.5,  dirt: 0.08 }
     };
 
     const canvas = document.getElementById('gameCanvas');
@@ -118,27 +125,73 @@
     const dirtDisp = document.getElementById('dirt');
     const timerDisp = document.getElementById('timer');
     const meshBtn = document.getElementById('btn-mesh');
+    
+    const countOverlay = document.getElementById('count-overlay');
+    const countDisplay = document.getElementById('count-display');
     const startOverlay = document.getElementById('start-overlay');
     const resultOverlay = document.getElementById('result-overlay');
     const finalScoreDisp = document.getElementById('final-score');
 
     const width = Math.min(window.innerWidth * 0.95, 450);
-    // Canvasの高さを画面の55%に拡大（前は45%）
     const height = window.innerHeight * 0.55; 
     canvas.width = width;
     canvas.height = height;
 
-    // 皿のエリアを少し小さくして網を広くする
     const plateY = height * 0.78; 
     let score = 0, dirt = 0, timeLeft = 30;
     let meats = [], particles = [], gameActive = false;
     let timerInterval, spawnInterval;
 
+    // ボタンを押した時のカウントダウン処理
+    window.preStart = function() {
+        startOverlay.style.display = 'none';
+        countOverlay.style.display = 'flex';
+        countDisplay.style.display = 'block';
+        
+        let count = 3;
+        countDisplay.innerText = count;
+
+        const cd = setInterval(() => {
+            count--;
+            if (count > 0) {
+                countDisplay.innerText = count;
+            } else if (count === 0) {
+                countDisplay.innerText = "GO!";
+                countDisplay.style.color = "#2ecc71";
+            } else {
+                clearInterval(cd);
+                countOverlay.style.display = 'none';
+                startGame();
+            }
+        }, 1000);
+    };
+
+    window.startGame = function() {
+        gameActive = true;
+        for(let i=0; i<4; i++) meats.push(new Meat(true));
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            timerDisp.innerText = timeLeft;
+            if (timeLeft <= 0) endGame();
+        }, 1000);
+        spawnInterval = setInterval(() => {
+            if (meats.filter(m => m.isOnPlate).length < 5) meats.push(new Meat(true));
+        }, 1000);
+    };
+
+    function endGame() {
+        gameActive = false;
+        clearInterval(timerInterval);
+        clearInterval(spawnInterval);
+        finalScoreDisp.innerText = score;
+        resultOverlay.style.display = 'flex';
+    }
+
     class Meat {
         constructor(isOnPlate = true) {
             const keys = Object.keys(MEAT_TYPES);
             this.type = MEAT_TYPES[keys[Math.floor(Math.random() * keys.length)]];
-            this.w = 64; this.h = 64; // 肉のサイズを少し大きく
+            this.w = 64; this.h = 64;
             this.isOnPlate = isOnPlate;
             this.cook = 0;
             this.isDragging = false;
@@ -159,10 +212,7 @@
             if (!gameActive || this.isDragging || this.isOnPlate) return;
             let efficiency = Math.max(0.1, (100 - dirt) / 100);
             this.cook += this.type.speed * efficiency;
-            
-            // 汚れの蓄積を以前よりマイルドに
             dirt += this.type.dirt * (this.status === 'bad' ? 2 : 1);
-
             if (this.cook > 100) this.status = 'ok';
             if (this.cook > 180) this.status = 'bad';
         }
@@ -171,14 +221,12 @@
             if (this.status === 'bad') currentImg = images.bad;
             else if (this.status === 'ok') currentImg = images.ok;
             else currentImg = images[this.type.imgKey];
-
             if (currentImg.complete) {
                 ctx.drawImage(currentImg, this.x, this.y, this.w, this.h);
             } else {
                 ctx.fillStyle = "#444";
                 ctx.fillRect(this.x, this.y, this.w, this.h);
             }
-            
             if(!this.isOnPlate) {
                 ctx.fillStyle = "rgba(0,0,0,0.5)";
                 ctx.fillRect(this.x, this.y - 12, this.w, 8);
@@ -187,28 +235,6 @@
                 ctx.fillRect(this.x, this.y - 12, (Math.min(this.cook, 200) / 200) * this.w, 8);
             }
         }
-    }
-
-    window.startGame = function() {
-        gameActive = true;
-        startOverlay.style.display = 'none';
-        for(let i=0; i<4; i++) meats.push(new Meat(true));
-        timerInterval = setInterval(() => {
-            timeLeft--;
-            timerDisp.innerText = timeLeft;
-            if (timeLeft <= 0) endGame();
-        }, 1000);
-        spawnInterval = setInterval(() => {
-            if (meats.filter(m => m.isOnPlate).length < 5) meats.push(new Meat(true));
-        }, 1000); // 補充も少し早く
-    };
-
-    function endGame() {
-        gameActive = false;
-        clearInterval(timerInterval);
-        clearInterval(spawnInterval);
-        finalScoreDisp.innerText = score;
-        resultOverlay.style.display = 'flex';
     }
 
     meshBtn.addEventListener('click', () => {
@@ -254,7 +280,6 @@
             activeMeat.isDragging = false; activeMeat = null; 
         } 
     }
-
     canvas.addEventListener('mousedown', startAction);
     window.addEventListener('mousemove', moveAction);
     window.addEventListener('mouseup', endAction);
@@ -264,16 +289,11 @@
 
     function loop() {
         ctx.clearRect(0, 0, width, height);
-        
-        // 網の描画
         ctx.strokeStyle = "#444"; ctx.lineWidth = 1;
         for(let i=0; i<width; i+=25) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,plateY); ctx.stroke(); }
         for(let i=0; i<plateY; i+=25) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(width,i); ctx.stroke(); }
-        
-        // お皿エリアの背景
         ctx.fillStyle = "#2c3e50"; ctx.fillRect(0, plateY, width, height - plateY);
-        ctx.fillStyle = "#e67e22"; ctx.fillRect(0, plateY, width, 4); // 境界線
-
+        ctx.fillStyle = "#e67e22"; ctx.fillRect(0, plateY, width, 4);
         meats.forEach(m => { m.update(); m.draw(); });
         particles.forEach((p, i) => {
             ctx.fillStyle = p.color || "#fff"; ctx.font = "bold 24px sans-serif"; ctx.fillText(p.text, p.x, p.y);
